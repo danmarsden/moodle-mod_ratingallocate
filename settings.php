@@ -26,4 +26,12 @@ if ($ADMIN->fulltree) {
             'idnumber'    => new lang_string('idnumber'),
             'email'       => new lang_string('email'),
         ]));
+
+    $settings->add(new admin_setting_configcheckbox('ratingallocate/pagination',
+        get_string('usepagination', 'ratingallocate'),
+        get_string('usepagination_desc', 'ratingallocate'), '1'));
+
+    $settings->add(new admin_setting_configtext('ratingallocate/choicepagesizedefault',
+        get_string('choicepagesize', 'ratingallocate'),
+        get_string('choicepagesize_desc', 'ratingallocate'), '20', PARAM_INT));
 }

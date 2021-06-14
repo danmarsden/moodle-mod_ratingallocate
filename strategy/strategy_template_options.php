@@ -68,9 +68,8 @@ abstract class ratingallocate_options_strategyform extends \ratingallocate_strat
         global $USER;
         parent::definition();
         $mform = $this->_form;
-
-        $ratingdata = $this->ratingallocate->get_rating_data_for_user($USER->id);
-
+        $page = optional_param('page', 0, PARAM_INT);
+        $ratingdata = $this->ratingallocate->get_rating_data_for_user($USER->id, $page);
         foreach ($ratingdata as $data) {
             $headerelem = 'head_ratingallocate_' . $data->choiceid;
             $elemprefix = 'data[' . $data->choiceid . ']';
@@ -123,6 +122,7 @@ abstract class ratingallocate_options_strategyform extends \ratingallocate_strat
     }
 
     public function validation($data, $files) {
+        global $DB, $USER;
         $maxno = $this->get_max_amount_of_nos();
         $errors = parent::validation($data, $files);
 
@@ -130,8 +130,8 @@ abstract class ratingallocate_options_strategyform extends \ratingallocate_strat
             return $errors;
         }
 
-        $impossibles = 0;
-        $ratings = $data ['data'];
+        $ratings = $data['data'];
+        $impossibles = $this->get_count_choices(array_keys($ratings), 0);
 
         foreach ($ratings as $rating) {
             if (key_exists('rating', $rating) && $rating ['rating'] == 0) {

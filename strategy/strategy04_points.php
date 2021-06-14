@@ -95,8 +95,8 @@ class mod_ratingallocate_view_form extends \ratingallocate_strategyform {
         parent::definition();
 
         $mform = $this->_form;
-
-        $ratingdata = $this->ratingallocate->get_rating_data_for_user($USER->id);
+        $page = optional_param('page', 0, PARAM_INT);
+        $ratingdata = $this->ratingallocate->get_rating_data_for_user($USER->id, $page);
 
         foreach ($ratingdata as $data) {
             $headerelem = 'head_ratingallocate_' . $data->choiceid;
@@ -144,12 +144,13 @@ class mod_ratingallocate_view_form extends \ratingallocate_strategyform {
         $totalpoints = $this->get_strategysetting(strategy::TOTALPOINTS);
         $errors = parent::validation($data, $files);
 
-        if (!array_key_exists('data', $data) or count($data ['data']) < 2) {
+        if (!array_key_exists('data', $data) or count($data ['data']) < 1) {
             return $errors;
         }
 
-        $impossibles = 0;
         $ratings = $data ['data'];
+        $impossibles = $this->get_count_choices(array_keys($ratings), 0);
+
         $currentpoints = 0;
         foreach ($ratings as $cid => $rating) {
             if ($rating['rating'] < 0 || $rating['rating'] > $totalpoints) {
@@ -168,12 +169,12 @@ class mod_ratingallocate_view_form extends \ratingallocate_strategyform {
             }
         }
 
-        if ($currentpoints <> $totalpoints) {
+        $lastpage = $this->pagination_lastpage($data);
+        if ($lastpage && $currentpoints <> $totalpoints) {
             foreach ($ratings as $cid => $rating) {
                 $errors ['data[' . $cid . '][rating]'] = get_string(strategy::STRATEGYID . '_incorrect_totalpoints', ratingallocate_MOD_NAME, $totalpoints);
             }
         }
         return $errors;
     }
-
 }

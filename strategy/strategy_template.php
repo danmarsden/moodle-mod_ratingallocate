@@ -195,6 +195,12 @@ abstract class ratingallocate_strategyform extends \moodleform  {
     private $strategy;
 
     /**
+     * Does this rating type allow for pagination.
+     * @var bool
+     */
+    public $allowpagination = true;
+
+    /**
      *
      * @param string $url The page url
      * @param \ratingallocate $ratingallocate The calling ratingallocate instance
@@ -210,6 +216,9 @@ abstract class ratingallocate_strategyform extends \moodleform  {
             $this->strategyoptions = array();
         }
         $this->strategy = $this->construct_strategy($this->strategyoptions);
+        if (empty(get_config('ratingallocate', 'pagination'))) {
+            $this->allowpagination = false;
+        }
         parent::__construct($url);
     }
 
@@ -235,6 +244,10 @@ abstract class ratingallocate_strategyform extends \moodleform  {
 
         $mform->addElement('hidden', 'action', ACTION_GIVE_RATING);
         $mform->setType('action', PARAM_TEXT);
+
+        $page = optional_param('page', 0, PARAM_INT);
+        $mform->addElement('hidden', 'page', $page);
+        $mform->setType('page', PARAM_INT);
     }
 
     /**
@@ -273,5 +286,99 @@ abstract class ratingallocate_strategyform extends \moodleform  {
             return $this->strategyoptions[$key];
         }
         return null;
+    }
+
+    /**
+     *
+     * Use custom page action buttons when pagination in use.
+     *
+     * @param bool $cancel
+     * @param null $submitlabel
+     * @throws coding_exception
+     * @throws dml_exception
+     */
+    public function add_action_buttons($cancel = true, $submitlabel = null)  {
+        if (!$this->allowpagination) {
+            // Not using pagination - just call parent and return.
+            parent::add_action_buttons($cancel, $submitlabel);
+            return;
+        }
+        $choicecount = $this->ratingallocate->get_choice_count();
+        $pagesize = $this->ratingallocate->get_perpage();
+        $page = optional_param('page', 0, PARAM_INT); // Current page.
+        // If the number of choices is more than our pagesize.
+        if ($choicecount > $pagesize) {
+            $mform =& $this->_form;
+            $buttonarray = array();
+
+            if (!empty($page) && $choicecount > $pagesize) { // If we are not on the first page.
+                $buttonarray[] = &$mform->createElement('submit', 'submitprevious',
+                    get_string('submitprevious', 'ratingallocate'));
+            }
+
+            if ($choicecount > ($page + 1) * $pagesize) { // If we are not on the last page.
+                $buttonarray[] = &$mform->createElement('submit', 'submitnext',
+                    get_string('submitnext', 'ratingallocate'));
+            } else {
+                $buttonarray[] = &$mform->createElement('submit', 'submitbutton', get_string('savechanges'));
+            }
+            $buttonarray[] = &$mform->createElement('cancel');
+            $mform->addGroup($buttonarray, 'buttonar', '', array(' '), false);
+            $mform->closeHeaderBefore('buttonar');
+            $mform->addElement('hidden', 'perpage', $this->ratingallocate->get_perpage());
+            $mform->setType('perpage', PARAM_INT);
+        } else {
+            // Not using pagination - just call parent.
+            parent::add_action_buttons($cancel, $submitlabel);
+        }
+    }
+
+    /**
+     * Get count of choices excluding those on current page.
+     *
+     * @param array $excluding - list of choices to ignore from count - (displayed on current page)
+     * @param int $rating 0 or 1 depending on accept or deny list.
+     * @return int
+     * @throws coding_exception
+     * @throws dml_exception
+     */
+    public function get_count_choices($excluding, $rating) {
+        global $DB, $USER;
+        if (!$this->allowpagination) {
+            // Pagination not in use - all choices shown on current page.
+            return 0;
+        }
+        // Get all ratings set to 0 not in the current page.
+        list($insql, $params) = $DB->get_in_or_equal($excluding, SQL_PARAMS_NAMED, 'param', false);
+        $params['userid'] = $USER->id;
+        $params['ratingallocateid'] = $this->ratingallocate->ratingallocate->id;
+        $params['rating'] = $rating;
+
+        $impossibles = $DB->count_records_select('ratingallocate_ratings',
+            "userid = :userid AND rating = :rating
+                       AND choiceid IN (SELECT id FROM {ratingallocate_choices}
+                                        WHERE ratingallocateid = :ratingallocateid)
+                       AND choiceid $insql", $params);
+        return $impossibles;
+    }
+
+    /**
+     * Some validation should only happen on the last page when pagination is in use.
+     *
+     * @param array $data
+     * @return bool
+     * @throws coding_exception
+     */
+    public function pagination_lastpage($data) {
+        if ($this->allowpagination) {
+            $choicecount = $this->ratingallocate->get_choice_count();
+            $pagesize = $this->ratingallocate->get_perpage();
+            $page = optional_param('page', 0, PARAM_INT); // Current page.
+            // If we are not on the last page or if the submit previous button is used, don't validate minticks.
+            if ($choicecount >= ($page + 1) * $pagesize || !empty($data['submitprevious'])) {
+                return false;
+            }
+        }
+        return true;
     }
 }
