@@ -107,6 +107,8 @@ class mod_ratingallocate_view_form extends \ratingallocate_strategyform {
         $page = optional_param('page', 0, PARAM_INT);
 
         $ratingdata = $this->ratingallocate->get_rating_data_for_user($USER->id, $page);
+        // Filter choices to display by groups, where 'usegroups' is true.
+        $ratingdata = $this->ratingallocate->filter_choices_by_groups($ratingdata, $USER->id);
 
         foreach ($ratingdata as $data) {
             $headerelem = 'head_ratingallocate_' . $data->choiceid;
