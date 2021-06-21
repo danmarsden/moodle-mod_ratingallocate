@@ -392,6 +392,11 @@ class ratingallocate {
 
                 if (!$mform->is_cancelled()) {
                     if ($mform->is_validated()) {
+                        // Processing for editor element (FORMAT_HTML is assumed).
+                        // Note: No file management implemented at this point.
+                        if (is_array($data->explanation)) {
+                            $data->explanation = $data->explanation['text'];
+                        }
                         $this->save_modify_choice_form($data);
 
                         $data = file_postupdate_standard_filemanager($data, 'attachments', $options, $this->context,
