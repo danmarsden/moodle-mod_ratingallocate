@@ -190,6 +190,7 @@ $string['modify_choices_group_desc_published'] = 'The allocations have been publ
 $string['err_positivnumber'] = 'You must supply a positive number here.';
 $string['saveandnext'] = 'Save and add next';
 $string['choice_added_notification'] = 'Choice saved.';
+$string['preallocate_users'] = 'Preallocate users';
 
 // </editor-fold>
 // <editor-fold defaultstate="collapsed" desc="Form to upload choices via CSV (administrator)">
@@ -208,6 +209,23 @@ $string['csvupload_test_problems'] = 'Problems found in CSV import test: {$a}';
 $string['csvupload_test_success'] = 'CSV import test successful. {$a->importcount} choices can be imported.';
 $string['csvupload_test_upload'] = 'Test upload';
 $string['csvupload_test_upload_help'] = 'When checked: test the uploaded CSV file for data problems, but do not commit to the database.';
+// </editor-fold>
+
+// <editor-fold defaultstate="collapsed" desc="Form to preallocate users to choices (administrator)">
+$string['preallocate_users_for_choice'] = 'Preallocate users for {$a}';
+$string['preallocate_selectusers'] = 'Select users to allocate';
+$string['preallocate_maxsize'] = 'A maximum of {$a} users should be allocated to this choice.';
+$string['preallocate_reason'] = 'Reasons';
+$string['preallocate_reasonexplanation'] = 'Reasons will be applied to all selected users above.';
+$string['preallocate_table'] = 'Preallocated users';
+$string['preallocate_table_noneyet'] = 'No users preallocated to this choice yet.';
+$string['preallocate_header_user_name'] = 'Name';
+$string['preallocate_header_user_idnumber'] = 'ID Number';
+$string['preallocate_header_user_email'] = 'Email address';
+$string['preallocate_header_reason'] = 'Allocation Reasons';
+$string['preallocate_header_allocator'] = 'Allocator';
+$string['preallocate_header_action'] = 'Action';
+$string['preallocate_deleteconfirm'] = 'Do you really want to remove preallocation for {$a}?';
 // </editor-fold>
 
 // <editor-fold defaultstate="collapsed" desc="Form to edit the instance(administrator)">
