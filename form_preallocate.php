@@ -94,7 +94,7 @@ class preallocate_form extends moodleform {
 
         $element = 'reason';
         $mform->addElement('text', $element, get_string('preallocate_reason', 'mod_ratingallocate'));
-
+        $mform->setType('reason', PARAM_TEXT);
         $mform->addElement('static', 'reasonexplanation', null, get_string('preallocate_reasonexplanation', 'mod_ratingallocate'));
 
         $this->add_buttons();
