@@ -73,6 +73,9 @@ $string['too_few_choices_to_rate'] = 'There are too few choices to rate! Student
 $string['at_least_one_rateable_choices_needed'] = 'You need at least one rateable choice.';
 $string['no_rating_possible'] = 'Currently, there is no rating possible!';
 $string['preallocated_to_choice'] = 'You have been pre-allocated to "{$a->choice}" by {$a->allocator}. No other ratings will be used.';
+$string['allocate_unrated'] = 'Allocate unrated users';
+$string['allocate_unrated_explanation'] = 'Allocate users that have not provided a rating';
+$string['confirm_allocate_unrated'] = 'This will find all unrated users and allocate them to a choice, are you sure to continue?';
 // </editor-fold>
 // <editor-fold defaultstate="collapsed" desc="Administrator View">
 $string['allocation_manual_explain_only_raters'] = 'Select a choice to be assigned to a user.
@@ -411,3 +414,4 @@ $string['showingperpage'] = 'Showing {$a} items per page';
 $string['showingperpagechange'] = 'Change ...';
 $string['usepagination'] = 'Pagination';
 $string['usepagination_desc'] = 'If enabled, the list of choices available for students while voting uses pagination.';
+$string['nochoicefoundforuser'] = 'Unable to find an available choice for user {$a}';

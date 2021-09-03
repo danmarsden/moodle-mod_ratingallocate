@@ -88,6 +88,7 @@ define('ACTION_DISABLE_CHOICE', 'disable_choice');
 define('ACTION_DELETE_CHOICE', 'delete_choice');
 define('ACTION_START_DISTRIBUTION', 'start_distribution');
 define('ACTION_MANUAL_ALLOCATION', 'manual_allocation');
+define('ACTION_ALLOCATE_UNRATED', 'allocate_unrated');
 define('ACTION_PREALLOCATE_CHOICE', 'preallocate_choice');
 define('ACTION_PREALLOCATE_REMOVE', 'preallocate_remove');
 define('ACTION_PUBLISH_ALLOCATIONS', 'publish_allocations'); // Make them displayable for the users.
@@ -234,7 +235,62 @@ class ratingallocate {
                     context_module::instance($this->coursemodule->id), $this->ratingallocateid, $timeneeded);
                 $event->trigger();
 
-                redirect(new moodle_url($PAGE->url->out()),
+                redirect(new moodle_url(new moodle_url('/mod/ratingallocate/view.php',
+                    array('id' => $this->coursemodule->id))),
+                    get_string('distribution_saved', ratingallocate_MOD_NAME, $timeneeded),
+                    null,
+                    \core\output\notification::NOTIFY_SUCCESS);
+            }
+        }
+        redirect(new moodle_url('/mod/ratingallocate/view.php',
+            array('id' => $this->coursemodule->id)));
+        return;
+    }
+
+    /**
+     * Function to allocate users that have not rated their choices.
+     * Basically a copy of process_action_start_distribution, would be good to limit code duplication.
+     *
+     * NOTE: only supports basic choices at the moment.
+     */
+    private function process_action_allocate_unrated() {
+        global $DB, $PAGE;
+        // Process form: requires the start_distibution capability.
+        if (has_capability('mod/ratingallocate:start_distribution', $this->context)) {
+
+            if ($this->get_algorithm_status() === \mod_ratingallocate\algorithm_status::running) {
+                // Don't run, if an instance is already running.
+                redirect(new moodle_url('/mod/ratingallocate/view.php',
+                    array('id' => $this->coursemodule->id)),
+                    get_string('algorithm_already_running', ratingallocate_MOD_NAME),
+                    null,
+                    \core\output\notification::NOTIFY_INFO);
+            } else if ($this->ratingallocate->runalgorithmbycron === "1" &&
+                $this->get_algorithm_status() === \mod_ratingallocate\algorithm_status::notstarted
+            ) {
+                // Don't run, if the cron has not started yet, but is set as priority.
+                redirect(new moodle_url('/mod/ratingallocate/view.php',
+                    array('id' => $this->coursemodule->id)),
+                    get_string('algorithm_scheduled_for_cron', ratingallocate_MOD_NAME),
+                    null,
+                    \core\output\notification::NOTIFY_INFO);
+            } else {
+                $this->origdbrecord->{this_db\ratingallocate::ALGORITHMSTATUS} = \mod_ratingallocate\algorithm_status::running;
+                $DB->update_record(this_db\ratingallocate::TABLE, $this->origdbrecord);
+                // Try to get some more memory, 500 users in 10 groups take about 15mb.
+                raise_memory_limit(MEMORY_EXTRA);
+                core_php_time_limit::raise();
+                // Distribute choices.
+                // Specific distibution function - the rest is just a copy of the other function.
+                $timeneeded = $this->distribute_choices_unrated();
+
+                // Logging.
+                $event = \mod_ratingallocate\event\distribution_triggered::create_simple(
+                    context_module::instance($this->coursemodule->id), $this->ratingallocateid, $timeneeded);
+                $event->trigger();
+
+                redirect(new moodle_url('/mod/ratingallocate/view.php',
+                    array('id' => $this->coursemodule->id)),
                     get_string('distribution_saved', ratingallocate_MOD_NAME, $timeneeded),
                     null,
                     \core\output\notification::NOTIFY_SUCCESS);
@@ -1039,6 +1095,9 @@ class ratingallocate {
                 $output .= $this->process_action_show_statistics();
                 $this->showinfo = false;
                 break;
+            case ACTION_ALLOCATE_UNRATED:
+                $output .= $this->process_action_allocate_unrated();
+                break;
 
             default:
                 $output .= $this->process_default();
@@ -1065,7 +1124,7 @@ class ratingallocate {
             // Filter choices to display by groups, where 'usegroups' is true.
             $choicestatus->own_choices = $this->filter_choices_by_groups($choicestatus->own_choices, $USER->id);
             // Filter choices that are already full due to preallocations.
-            $choicestatus->own_choices = $this->filter_choices_by_full_preallocations($choicestatus->own_choices);
+            $choicestatus->own_choices = $this->filter_choices_by_full_allocations($choicestatus->own_choices);
 
             $choicestatus->allocations = $this->get_allocations_for_user($USER->id);
             $choicestatus->strategy = $this->get_strategy_class();
@@ -1140,6 +1199,67 @@ class ratingallocate {
         $distributor->distribute_users($this);
         $timeneeded = (microtime(true) - $timestart);
         // echo memory_get_peak_usage();
+
+        // Set algorithm status to finished.
+        $this->origdbrecord->algorithmstatus = \mod_ratingallocate\algorithm_status::finished;
+        $this->db->update_record(this_db\ratingallocate::TABLE, $this->origdbrecord);
+
+        return $timeneeded;
+    }
+
+    /**
+     * distribution of choices for each unrated user
+     * take care about max_execution_time and memory_limit
+     */
+    function distribute_choices_unrated() {
+        require_capability('mod/ratingallocate:start_distribution', $this->context);
+        $renderer = $this->get_renderer();
+        // Set algorithm status to running.
+        $this->origdbrecord->algorithmstatus = \mod_ratingallocate\algorithm_status::running;
+        $this->origdbrecord->algorithmstarttime = time();
+        $this->db->update_record(this_db\ratingallocate::TABLE, $this->origdbrecord);
+
+        // DO THE ALLOCATION.
+        $timestart = microtime(true);
+        // Find all possible choices.
+        $choices = $this->get_rateable_choices();
+        // Remove all full choices.
+        $choices = $this->filter_choices_by_full_allocations($choices, false);
+
+        // Find all users that can rate.
+        $users = $this->get_raters_in_course();
+
+        // Remove users that already have a rating in this instance.
+        $allocatedusers = $this->db->get_records_menu('ratingallocate_allocations', ['ratingallocateid' => $this->ratingallocateid], '', 'id, userid');
+        foreach ($allocatedusers as $userid) {
+            unset($users[$userid]);
+        }
+
+        foreach ($users as $user) {
+            // Filter the list of available choices by this users group.
+            // Find a choice they are allowed to use
+            $userschoices = $this->filter_choices_by_groups($choices, $user->id);
+            if (empty($userschoices)) {
+                $renderer->add_notification(get_string('nochoicefoundforuser', ratingallocate_MOD_NAME, $user->username));
+                continue;
+            }
+            $choice = array_shift($userschoices); // Find first possible choice we can use for this user.
+
+            // Allocate them to the choice.
+            $this->add_allocation($choice->id, $user->id);
+
+
+            if ($choice->maxsize == 1) {
+                unset($choices[$choice->id]);
+            } else {
+                // TODO: this is extremely in-efficient we should do it better.
+
+                // Remove any full choices now that an allocation has been made.
+                $choices = $this->filter_choices_by_full_allocations($choices, false);
+            }
+
+        }
+        $timeneeded = (microtime(true) - $timestart);
 
         // Set algorithm status to finished.
         $this->origdbrecord->algorithmstatus = \mod_ratingallocate\algorithm_status::finished;
@@ -1675,14 +1795,16 @@ class ratingallocate {
     }
 
     /**
-     * Fetches a count of preallocated users for all choice IDs in rating.
+     * Fetches a count of allocated users for all choice IDs in rating.
      */
-    public function get_preallocation_counts() {
+    public function get_allocation_counts($preallocations = true) {
         $sql = 'SELECT choiceid, COUNT(userid)
             FROM {ratingallocate_allocations}
-            WHERE ratingallocateid=:ratingallocateid
-            AND manual=1
-            GROUP BY choiceid';
+            WHERE ratingallocateid=:ratingallocateid';
+        if ($preallocations) {
+            $sql .= ' AND manual = 1 ';
+        }
+        $sql .= ' GROUP BY choiceid';
 
         $countrecords = $this->db->get_records_sql($sql, array(
             'ratingallocateid' => $this->ratingallocateid
@@ -1700,12 +1822,12 @@ class ratingallocate {
      * @param array $choices An array of objects, keyed by ID.
      * @return array A filtered array of choices, keyed by ID.
      */
-    public function filter_choices_by_full_preallocations($choices) {
+    public function filter_choices_by_full_allocations($choices, $preallocations = true) {
         $filteredchoices = array();
-        $preallocationcounts = $this->get_preallocation_counts();
+        $allocationcounts = $this->get_allocation_counts($preallocations);
 
         foreach ($choices as $choiceid => $choice) {
-            if (empty($preallocationcounts[$choiceid]) || $preallocationcounts[$choiceid] < $choice->maxsize) {
+            if (empty($allocationcounts[$choiceid]) || $allocationcounts[$choiceid] < $choice->maxsize) {
                 $filteredchoices[$choiceid] = $choice;
             }
         }

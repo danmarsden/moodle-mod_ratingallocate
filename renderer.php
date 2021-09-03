@@ -326,6 +326,13 @@ class mod_ratingallocate_renderer extends plugin_renderer_base {
         $button->add_action(new confirm_action(get_string('confirm_start_distribution', ratingallocate_MOD_NAME)));
 
         $output .= $this->render($button);
+        $starturl = new moodle_url($PAGE->url, array('action' => ACTION_ALLOCATE_UNRATED));
+        $button = new single_button($starturl, get_string('allocate_unrated', ratingallocate_MOD_NAME), 'get');
+        $button->disabled = !($ratingover);
+        $button->tooltip = get_string('allocate_unrated_explanation', ratingallocate_MOD_NAME);
+        $button->add_action(new confirm_action(get_string('confirm_allocate_unrated', ratingallocate_MOD_NAME)));
+
+        $output .= $this->render($button);
 
         $output .= $this->single_button(new moodle_url('/mod/ratingallocate/view.php', array('id' => $coursemoduleid,
             'action' => ACTION_MANUAL_ALLOCATION)), get_string('manual_allocation_form', ratingallocate_MOD_NAME), 'get',
